@@ -1,16 +1,16 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import * as request from 'supertest';
-import { AsyncApplicationModule } from '../src/app-async.module';
 import { Server } from 'http';
+import * as request from 'supertest';
+import { AppSchemaModule } from '../src/app-schema.module';
 
-describe('TypeOrm (async configuration)', () => {
+describe('TypeOrm', () => {
   let server: Server;
   let app: INestApplication;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
-      imports: [AsyncApplicationModule],
+      imports: [AppSchemaModule],
     }).compile();
 
     app = module.createNestApplication();

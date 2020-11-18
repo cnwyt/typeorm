@@ -3,9 +3,10 @@ import {
   Global,
   Inject,
   Module,
-  OnModuleDestroy,
+  OnApplicationShutdown,
   Provider,
   Type,
+  Logger,
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { defer } from 'rxjs';
@@ -13,7 +14,7 @@ import {
   Connection,
   ConnectionOptions,
   createConnection,
-  getConnection,
+  getConnectionManager,
 } from 'typeorm';
 import {
   generateString,
@@ -22,6 +23,7 @@ import {
   getEntityManagerToken,
   handleRetry,
 } from './common/typeorm.utils';
+import { EntitiesMetadataStorage } from './entities-metadata.storage';
 import {
   TypeOrmModuleAsyncOptions,
   TypeOrmModuleOptions,
@@ -31,7 +33,9 @@ import { TYPEORM_MODULE_ID, TYPEORM_MODULE_OPTIONS } from './typeorm.constants';
 
 @Global()
 @Module({})
-export class TypeOrmCoreModule implements OnModuleDestroy {
+export class TypeOrmCoreModule implements OnApplicationShutdown {
+  private readonly logger = new Logger('TypeOrmModule');
+
   constructor(
     @Inject(TYPEORM_MODULE_OPTIONS)
     private readonly options: TypeOrmModuleOptions,
@@ -98,13 +102,18 @@ export class TypeOrmCoreModule implements OnModuleDestroy {
     };
   }
 
-  async onModuleDestroy() {
+  async onApplicationShutdown() {
     if (this.options.keepConnectionAlive) {
       return;
     }
-    const connection = this.moduleRef.get<Connection>(getConnectionToken(this
-      .options as ConnectionOptions) as Type<Connection>);
-    connection && (await connection.close());
+    const connection = this.moduleRef.get<Connection>(
+      getConnectionToken(this.options as ConnectionOptions) as Type<Connection>,
+    );
+    try {
+      connection && (await connection.close());
+    } catch (e) {
+      this.logger.error(e?.message);
+    }
   }
 
   private static createAsyncProviders(
@@ -113,11 +122,12 @@ export class TypeOrmCoreModule implements OnModuleDestroy {
     if (options.useExisting || options.useFactory) {
       return [this.createAsyncOptionsProvider(options)];
     }
+    const useClass = options.useClass as Type<TypeOrmOptionsFactory>;
     return [
       this.createAsyncOptionsProvider(options),
       {
-        provide: options.useClass,
-        useClass: options.useClass,
+        provide: useClass,
+        useClass,
       },
     ];
   }
@@ -132,11 +142,15 @@ export class TypeOrmCoreModule implements OnModuleDestroy {
         inject: options.inject || [],
       };
     }
+    // `as Type<TypeOrmOptionsFactory>` is a workaround for microsoft/TypeScript#31603
+    const inject = [
+      (options.useClass || options.useExisting) as Type<TypeOrmOptionsFactory>,
+    ];
     return {
       provide: TYPEORM_MODULE_OPTIONS,
       useFactory: async (optionsFactory: TypeOrmOptionsFactory) =>
         await optionsFactory.createTypeOrmOptions(options.name),
-      inject: [options.useClass || options.useExisting],
+      inject,
     };
   }
 
@@ -155,16 +169,50 @@ export class TypeOrmCoreModule implements OnModuleDestroy {
   ): Promise<Connection> {
     try {
       if (options.keepConnectionAlive) {
-        return getConnection(getConnectionName(options as ConnectionOptions));
+        const connectionName = getConnectionName(options as ConnectionOptions);
+        const manager = getConnectionManager();
+        if (manager.has(connectionName)) {
+          const connection = manager.get(connectionName);
+          if (connection.isConnected) {
+            return connection;
+          }
+        }
       }
     } catch {}
 
-    return await defer(() =>
-      options.type
-        ? createConnection(options as ConnectionOptions)
-        : createConnection(),
-    )
-      .pipe(handleRetry(options.retryAttempts, options.retryDelay))
+    const connectionToken = getConnectionName(options as ConnectionOptions);
+    return await defer(() => {
+      if (!options.type) {
+        return createConnection();
+      }
+      if (!options.autoLoadEntities) {
+        return createConnection(options as ConnectionOptions);
+      }
+
+      let entities = options.entities;
+      if (entities) {
+        entities = entities.concat(
+          EntitiesMetadataStorage.getEntitiesByConnection(connectionToken),
+        );
+      } else {
+        entities = EntitiesMetadataStorage.getEntitiesByConnection(
+          connectionToken,
+        );
+      }
+      return createConnection({
+        ...options,
+        entities,
+      } as ConnectionOptions);
+    })
+      .pipe(
+        handleRetry(
+          options.retryAttempts,
+          options.retryDelay,
+          connectionToken,
+          options.verboseRetryLog,
+          options.toRetry,
+        ),
+      )
       .toPromise();
   }
 }

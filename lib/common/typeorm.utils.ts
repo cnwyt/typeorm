@@ -6,23 +6,25 @@ import {
   Connection,
   ConnectionOptions,
   EntityManager,
+  EntitySchema,
   Repository,
 } from 'typeorm';
 import { isNullOrUndefined } from 'util';
-import * as uuid from 'uuid/v4';
+import { v4 as uuid } from 'uuid';
 import { CircularDependencyException } from '../exceptions/circular-dependency.exception';
+import { EntityClassOrSchema } from '../interfaces/entity-class-or-schema.type';
 import { DEFAULT_CONNECTION_NAME } from '../typeorm.constants';
 
 const logger = new Logger('TypeOrmModule');
 
 /**
  * This function generates an injection token for an Entity or Repository
- * @param {Function} This parameter can either be an Entity or Repository
+ * @param {EntityClassOrSchema} entity parameter can either be an Entity or Repository
  * @param {string} [connection='default'] Connection name
  * @returns {string} The Entity | Repository injection token
  */
 export function getRepositoryToken(
-  entity: Function,
+  entity: EntityClassOrSchema,
   connection: Connection | ConnectionOptions | string = DEFAULT_CONNECTION_NAME,
 ) {
   if (isNullOrUndefined(entity)) {
@@ -30,10 +32,17 @@ export function getRepositoryToken(
   }
   const connectionPrefix = getConnectionPrefix(connection);
   if (
-    entity.prototype instanceof Repository ||
-    entity.prototype instanceof AbstractRepository
+    entity instanceof Function &&
+    (entity.prototype instanceof Repository ||
+      entity.prototype instanceof AbstractRepository)
   ) {
     return `${connectionPrefix}${getCustomRepositoryToken(entity)}`;
+  }
+
+  if (entity instanceof EntitySchema) {
+    return `${connectionPrefix}${
+      entity.options.target ? entity.options.target.name : entity.options.name
+    }Repository`;
   }
   return `${connectionPrefix}${entity.name}Repository`;
 }
@@ -110,14 +119,28 @@ export function getEntityManagerToken(
 export function handleRetry(
   retryAttempts = 9,
   retryDelay = 3000,
+  connectionName = DEFAULT_CONNECTION_NAME,
+  verboseRetryLog = false,
+  toRetry?: (err: any) => boolean,
 ): <T>(source: Observable<T>) => Observable<T> {
   return <T>(source: Observable<T>) =>
     source.pipe(
-      retryWhen(e =>
+      retryWhen((e) =>
         e.pipe(
           scan((errorCount, error: Error) => {
+            if (toRetry && !toRetry(error)) {
+              throw error;
+            }
+            const connectionInfo =
+              connectionName === DEFAULT_CONNECTION_NAME
+                ? ''
+                : ` (${connectionName})`;
+            const verboseMessage = verboseRetryLog
+              ? ` Message: ${error.message}.`
+              : '';
+
             logger.error(
-              `Unable to connect to the database. Retrying (${errorCount +
+              `Unable to connect to the database${connectionInfo}.${verboseMessage} Retrying (${errorCount +
                 1})...`,
               error.stack,
             );
