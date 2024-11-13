@@ -27,7 +27,7 @@ Stack Overflow is a much better place to ask questions since:
 
 To save your and our time, we will systematically close all issues that are requests for general support and redirect people to Stack Overflow.
 
-If you would like to chat about the question in real-time, you can reach out via [our gitter channel][gitter].
+If you would like to chat about the question in real-time, you can reach out via [our discord channel][discord].
 
 ## <a name="issue"></a> Found a Bug?
 If you find a bug in the source code, you can help us by
@@ -185,7 +185,7 @@ Samples: (even more [samples](https://github.com/nestjs/nest/commits/master))
 docs(changelog): update change log to beta.5
 ```
 ```
-bugfix(@nestjs/core): need to depend on latest rxjs and zone.js
+fix(@nestjs/core): need to depend on latest rxjs and zone.js
 
 The version in our package.json gets copied to the one we publish, and users need the latest of these.
 ```
@@ -197,10 +197,11 @@ If the commit reverts a previous commit, it should begin with `revert: `, follow
 Must be one of the following:
 
 * **build**: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
+* **chore**: Updating tasks etc; no production code change
 * **ci**: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
 * **docs**: Documentation only changes
-* **feature**: A new feature
-* **bugfix**: A bug fix
+* **feat**: A new feature
+* **fix**: A bug fix
 * **perf**: A code change that improves performance
 * **refactor**: A code change that neither fixes a bug nor adds a feature
 * **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
@@ -242,7 +243,7 @@ changes to be accepted, the CLA must be signed. It's a quick process, we promise
 [corporate-cla]: http://code.google.com/legal/corporate-cla-v1.0.html
 [dev-doc]: https://github.com/nestjs/nest/blob/master/docs/DEVELOPER.md
 [github]: https://github.com/nestjs/nest
-[gitter]: https://gitter.im/nestjs/nest
+[discord]: https://discord.gg/nestjs
 [individual-cla]: http://code.google.com/legal/individual-cla-v1.0.html
 [js-style-guide]: https://google.github.io/styleguide/jsguide.html
 [jsfiddle]: http://jsfiddle.net

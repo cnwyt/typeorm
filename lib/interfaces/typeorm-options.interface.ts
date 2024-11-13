@@ -1,6 +1,5 @@
-import { Type } from '@nestjs/common';
-import { ModuleMetadata } from '@nestjs/common/interfaces';
-import { ConnectionOptions } from 'typeorm';
+import { ModuleMetadata, Provider, Type } from '@nestjs/common';
+import { DataSource, DataSourceOptions } from 'typeorm';
 
 export type TypeOrmModuleOptions = {
   /**
@@ -27,19 +26,31 @@ export type TypeOrmModuleOptions = {
   autoLoadEntities?: boolean;
   /**
    * If `true`, connection will not be closed on application shutdown.
+   * @deprecated
    */
   keepConnectionAlive?: boolean;
   /**
    * If `true`, will show verbose error messages on each connection retry.
    */
   verboseRetryLog?: boolean;
-} & Partial<ConnectionOptions>;
+  /**
+   * If `true` database initialization will not be performed during module initialization.
+   * This means that database connection will not be established and migrations will not run.
+   * Database initialization will have to be performed manually using `DataSource.initialize`
+   * and it will have to implement own retry mechanism (if necessary).
+   */
+  manualInitialization?: boolean;
+} & Partial<DataSourceOptions>;
 
 export interface TypeOrmOptionsFactory {
   createTypeOrmOptions(
     connectionName?: string,
   ): Promise<TypeOrmModuleOptions> | TypeOrmModuleOptions;
 }
+
+export type TypeOrmDataSourceFactory = (
+  options?: DataSourceOptions,
+) => Promise<DataSource>;
 
 export interface TypeOrmModuleAsyncOptions
   extends Pick<ModuleMetadata, 'imports'> {
@@ -49,5 +60,7 @@ export interface TypeOrmModuleAsyncOptions
   useFactory?: (
     ...args: any[]
   ) => Promise<TypeOrmModuleOptions> | TypeOrmModuleOptions;
+  dataSourceFactory?: TypeOrmDataSourceFactory;
   inject?: any[];
+  extraProviders?: Provider[];
 }
